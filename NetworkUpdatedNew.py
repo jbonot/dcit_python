@@ -364,7 +364,7 @@ def logout(myIP):
 def server():
     server = SimpleXMLRPCServer((ip, port), allow_none=True)
     server.register_function(initMasterString, "initMasterString")
-    server.register_function(joinRequest, "joinRequest")
+    server.register_function(joinRequest, "receiver.joinRequest")
     server.register_function(logout, "logout")
     server.register_function(myUpdatedID, "myUpdatedID")   
     server.register_function(acknowledgeNewJoin, "acknowledgeNewJoin")
@@ -407,7 +407,7 @@ def client():
                 print '\n Connecting yourself to yourself? Not possible'
                 continue
             proxyServer = xmlrpclib.ServerProxy("http://"+str(serverip)+":"+str(serverPort)+"/", allow_none=True)
-            proxyServer.joinRequest(ip, str(port), myID)
+            proxyServer.receiver.joinRequest(ip, str(port), myID)
             print '\n Connection established'
             continue   
         elif ans == "2":
