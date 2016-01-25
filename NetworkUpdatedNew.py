@@ -45,8 +45,11 @@ def randomStringGenerator():
 The code snippet below also takes care of a likely warning message
 if the user gives a not-a-number input for the port number '''
 
+
 import socket
 ip = socket.gethostbyname(socket.gethostname())
+
+
 while True:    
     try:
         port = int(raw_input('Assign me a port: '))
@@ -77,7 +80,6 @@ def checkID(clientID):
 # Joining
 def joinRequest(clientIP, clientPort, clientID):
     global nodes
-    newNode = [clientIP, clientPort, clientID]
     myDetails = [ip, port, myID]
     if checkInList(clientIP, clientPort) == False:
         newID = checkID(clientID)
@@ -86,34 +88,28 @@ def joinRequest(clientIP, clientPort, clientID):
             print "\n ID unique...joining node!"
         else:
             print "\n ID wasn't unique. Sending new ID to new node!"
-            updateId(clientIP, clientPort, clientID)
+            updateId(str(clientIP), int(clientPort), int(clientID))
         if len(nodes) > 1:
-            sendToAll(newNode)
+            sendToAll(str(clientIP), int(clientPort), int(clientID))
         proxyServer = xmlrpclib.ServerProxy("http://"+clientIP+":"+clientPort+"/", allow_none=True)
-        proxyServer.buildClientNetwork(ip, port, myID)  
+        proxyServer.receiver.nodeJoined(str(ip), int(port), int(myID))  
         for entry in nodes:
-            proxyServer.buildClientNetwork(entry[0], entry[1], entry[2])          
+            proxyServer.receiver.nodeJoined(str(entry[0]), int(entry[1]), int(entry[2]))        
         nodes.append(myDetails)
         return
     else:
         print "\n Node already in network!"
     return
 
-
-
-def buildClientNetwork(nodeIP, nodePort, nodeID):
-    newNode = [nodeIP, nodePort, nodeID]
-    nodes.append(newNode)
-    return
     
 def updateId(clientIP, clientPort, clientID):
     proxyServer = xmlrpclib.ServerProxy("http://"+clientIP+":"+clientPort+"/", allow_none=True)
-    proxyServer.myUpdatedID(clientID)
+    proxyServer.receiver.idUpdate(clientID)
     return
     
     
 # Code to update node's ID
-def myUpdatedID(newID):
+def idUpdate(newID):
     global myID
     myID = newID
     return
@@ -153,19 +149,20 @@ def createNewID():
 
 
 # Function to broadcast the message of new nodes joining the network
-def sendToAll(newNode):
+def sendToAll(clientIP, clientPort, clientID):
     global nodes
     for entry in nodes:
         proxyServer = xmlrpclib.ServerProxy("http://"+str(entry[0])+":"+str(entry[1])+"/", allow_none=True)
-        proxyServer.acknowledgeNewJoin(newNode)
+        proxyServer.receiver.nodeJoined(clientIP, clientPort, clientID)
     return
 
         
 # Function to acknowledge the joining of a new node to an already existing node
-def acknowledgeNewJoin(newNode):
+def nodeJoined(clientIP, clientPort, clientID):
     global nodes
-    nodes.append(newNode)
-    print "\n New node with IP: "+str(newNode[0])+" and port: "+str(newNode[1])+" added in the network"
+    node = [clientIP, clientPort, clientID]
+    nodes.append(node)
+    print "\n New node with IP: "+str(node[0])+" and port: "+str(node[1])+" added in the network"
     return
 
 
@@ -174,27 +171,27 @@ def callForElection():
     global ip
     global port
     global myID
-    receiveOK = ""
+    receivedOK = 0
     timeout_start = time.time()
     timeout = 5
-    highest = "YES"
-    while time.time() < (timeout_start + timeout):
-        print "\n Initiating Master Node Election..."
-        for entry in nodes:
-            if entry[2] > myID:
-                highest = "NO"
-                proxyServer = xmlrpclib.ServerProxy("http://"+str(entry[0])+":"+str(entry[1])+"/", allow_none=True)
-                receiveOK = proxyServer.notificationForElection(ip, port, myID)                 
-                if receiveOK == "OK":
-                    print "\n I lost the election!"
+    idList = []
+    for entry in nodes:
+        idList.append(entry[2]) 
+    if myID == max(idList):
+        print "\n Highest ID. I'm the Winner!"
+        setMasterNode()
+    else:
+        while time.time() < (timeout_start + timeout):
+            print "\n Initiating Master Node Election..."
+            for entry in nodes:
+                if entry[2] > myID:
+                    proxyServer = xmlrpclib.ServerProxy("http://"+str(entry[0])+":"+str(entry[1])+"/", allow_none=True)
+                    proxyServer.receiver.startElection(ip, port, myID)
+                    receivedOK = 1                
                     return
-        if highest == "YES":
-            print "\n Highest ID. I'm the Winner!"
-            setMasterNode()
-            return
-    if receiveOK == "":
-            print "\n No response. I'm the Winner!"
-            setMasterNode()
+            if receivedOK == 0:
+                print "\n No response. I'm the Winner!"
+                setMasterNode()
     return
 
 def isJoined():
@@ -284,11 +281,15 @@ def syncBlock(word):
     appendString(masterWordString, word)
     print "Updated String: "+masterWordString
     tLock.release()
+    
+    
 #-----------------------------------------------#
 #-----------------------------------------------#
 #---------------RICART AGRAWALA-----------------#
 #-----------------------------------------------#
 #-----------------------------------------------#
+
+
 def ricartAgrawala(masterNode):   
     return
 
@@ -301,60 +302,49 @@ def buildMasterNode():
     return
 
 
+def notifyToTheClient(clientID, ClientPort, nodeID):
+    proxyServer = xmlrpclib.ServerProxy("http://"+str(clientID)+":"+str(ClientPort)+"/", allow_none=True)
+    proxyServer.receiver.electionResponse(ip, port, myID)
+    return
+    
+    
+def electionResponse (nodeIP, nodePort, nodeID):
+    print "\nThe node with ID: "+str(nodeIP)+", port: "+str(nodePort)+" and ID: "+str(nodeID)+" has responded to take over the election"
+    print "\nI lost the election!"
+    return
+    
 # Notification For Election
-def notificationForElection(nodeIP, nodePort, nodeID):
+def startElection(nodeIP, nodePort, nodeID):
     print "\n Message received: ELECTION from "+str(nodeIP)+", "+str(nodePort)+", "+str(nodeID)+""
     print "\n My ID is higher so I'll start my own election!"
-    try:
-        return "OK"
-    finally:
-        callForElection()       
-
-'''
-def startThreads(nodeIP, nodePort, nodeID):
-    global thrElection1
-    global thrElection2
-    thrElection1 = threading.Thread(target = notificationForElection, args =(ip, port, myID))
-    thrElection1.start()
-    thrElection2 = threading.Thread(target = notificationForElection, args =(ip, port, myID))
-    thrElection2.start()
-    return
-'''
-
-# Send OK
-def sendOK(nodeIP, nodePort, nodeID):
-    proxyServer = xmlrpclib.ServerProxy("http://"+str(nodeIP)+":"+str(nodePort)+"/", allow_none=True)
-    proxyServer.receiveOK(ip, port, myID)
-    proxyServer.amIStillEligible("NO")
-    return
-    
-    
-# Receive OK
-def receiveOK(nodeIP, nodePort, nodeID):
-    print "\n Node with ip: "+str(nodeIP)+" and port: "+str(nodePort)+" took over."
-    return
+    notifyToTheClient(nodeIP, nodePort, nodeID)
+    callForElection()
+    return 
     
         
 # Set Master Node
 def setMasterNode():
     for entry in nodes:
                 proxyServer = xmlrpclib.ServerProxy("http://"+str(entry[0])+":"+str(entry[1])+"/", allow_none=True)
-                proxyServer.masterNodeConfirmation(ip, port, myID)
+                proxyServer.receiver.masterNodeAnnouncement(myID)
     return
     
 
 # Master Node Confirmation
-def masterNodeConfirmation(clientIP, clientPort, clientID):
-    print "\n The node with ip: "+str(clientIP)+" and port: "+str(clientPort)+" is the new master"
+def masterNodeAnnouncement(clientID):
+    print "\n The node with ID: "+str(clientID)+" is the new master"
     return
 
     
 # Logging out
-def logout(myIP):
+def nodeSignOff(nodeID):
     global nodes
     try:
-        nodes.remove(myIP)
-        print ("\n Node with IP: "+str(myIP[0])+" and Port: "+str(myIP[1])+" has left the network")
+        for entry in nodes:
+            if nodeID == entry[2]:
+                nodes.remove(entry)
+            print ("\n Node with IP: "+str(entry[0])+" and Port: "+str(entry[1])+" has left the network")
+            break
     except Exception:
         print '\n Not able to remove this node'
     return
@@ -363,16 +353,17 @@ def logout(myIP):
 # Server implementation
 def server():
     server = SimpleXMLRPCServer((ip, port), allow_none=True)
-    server.register_function(initMasterString, "initMasterString")
+    server.register_function(initMasterString, "receiver.initMasterString")
     server.register_function(joinRequest, "receiver.joinRequest")
-    server.register_function(logout, "logout")
-    server.register_function(myUpdatedID, "myUpdatedID")   
-    server.register_function(acknowledgeNewJoin, "acknowledgeNewJoin")
-    server.register_function(masterNodeConfirmation, "masterNodeConfirmation")
-    server.register_function(requestMasterString, "requestMasterString")
-    server.register_function(notificationForElection, "notificationForElection")
+    server.register_function(electionResponse, "receiver.electionResponse")
+    server.register_function(nodeSignOff, "receiver.nodeSignOff")
+    server.register_function(idUpdate, "receiver.idUpdate")   
+    server.register_function(nodeJoined, "receiver.nodeJoined")
+    server.register_function(masterNodeAnnouncement, "receiver.masterNodeAnnouncement")
+    server.register_function(requestMasterString, "receiver.requestMasterString")
+    server.register_function(startElection, "receiver.startElection")
     #server.register_function(startThreads, "startThreads")
-    print "\n Server started and listening with IP = "+str(ip)+" and port = "+str(port)
+    print "\nServer started and listening..."
     server.serve_forever()
 
 
@@ -388,7 +379,7 @@ def client():
     global port
     global myID
     myID = createID()
-    myInfo = [ip, port, myID]
+    print "["+str(ip)+", "+str(port)+", "+str(myID)+"]"
     while True:
         print("""
         1. Join
@@ -407,7 +398,7 @@ def client():
                 print '\n Connecting yourself to yourself? Not possible'
                 continue
             proxyServer = xmlrpclib.ServerProxy("http://"+str(serverip)+":"+str(serverPort)+"/", allow_none=True)
-            proxyServer.receiver.joinRequest(ip, str(port), myID)
+            proxyServer.receiver.joinRequest(str(ip), str(port), int(myID))
             print '\n Connection established'
             continue   
         elif ans == "2":
@@ -418,11 +409,8 @@ def client():
             continue
         elif ans == "4":
             for entry in nodes:
-                if entry != myInfo:
                     proxy = xmlrpclib.ServerProxy("http://"+str(entry[0])+":"+str(entry[1])+"/", allow_none=True)
-                    proxy.logout(ip)
-            nodes.remove(myInfo)
-            nodes = []
-            nodes.append(myInfo)          
-            break
+                    proxy.receiver.nodeSignOff(int(myID))
+            nodes = []         
+            continue
 client()
