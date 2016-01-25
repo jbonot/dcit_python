@@ -10,6 +10,8 @@ import xmlrpclib
 import random
 import time
 from SimpleXMLRPCServer import SimpleXMLRPCServer
+import cme
+
 nodes = []
 ip = 0
 port = 0
@@ -203,16 +205,20 @@ def isJoined():
 
 # Start read-write
 def startReadWrite():
-    buildMasterNode()
     print ("\n Usage: start <algorithm (CME or RA)>: "),    
-    algorithm = raw_input
-    timeout_start = time.time()
-    timeout = 20
-    while time.time() < (timeout_start + timeout):
-        if str(algorithm).upper() == "CME":
-            sendStart("CENTRALIZED_MUTUAL_EXCLUSION");
-        elif str(algorithm).upper() == "RA":
-            sendStart("RICART_AGRAWALA")
+    algorithm = raw_input()
+    if str(algorithm).upper() == "CME":
+        centralizedMutualExclusion()
+    elif str(algorithm).upper() == "RA":
+        buildMasterNode()
+        timeout_start = time.time()
+        timeout = 20
+        while time.time() < (timeout_start + timeout):
+            if str(algorithm).upper() == "CME":
+                sendStart("CENTRALIZED_MUTUAL_EXCLUSION");
+            elif str(algorithm).upper() == "RA":
+                sendStart("RICART_AGRAWALA")
+    else: print('unknown algorithm: ' + algorithm)
     return
 
 
@@ -228,18 +234,11 @@ def sendStart(entry):
 #---------CENTRALIZED MUTUAL EXCLUSION----------#
 #-----------------------------------------------#
 #-----------------------------------------------#    
-
 def centralizedMutualExclusion():
-    for entry in nodes:
-        proxyServer = xmlrpclib.ServerProxy("http://"+str(entry[0])+":"+str(entry[1])+"/", allow_none=True)
-        proxyServer.readWriteStarted("start")
-    word = randomStringGenerator()
-    proxyServer = xmlrpclib.ServerProxy("http://"+str(masterNode[0])+":"+str(masterNode[1])+"/", allow_none=True)
-    proxyServer.requestMasterString(ip, port, myID, word)  
-    proxyServer.initMasterString()               
-    checkRequestQueue()
-    return
-
+    for node in nodes:
+        proxyServer = cme.get_proxy_server(node[0], node[1])
+        proxyServer.receiver.startDistributedReadWrite(0)
+    cme.start([ip, port, myID], nodes)
 
 def readWriteStarted(entry):
     print "received the message: "+str(entry)
@@ -350,6 +349,11 @@ def nodeSignOff(nodeID):
     return
 
 
+def startDistributedReadWrite(algorithm):
+    if algorithm == 0:
+        cme.start([ip, port, myID], nodes)
+
+
 # Server implementation
 def server():
     server = SimpleXMLRPCServer((ip, port), allow_none=True)
@@ -362,6 +366,8 @@ def server():
     server.register_function(masterNodeAnnouncement, "receiver.masterNodeAnnouncement")
     server.register_function(requestMasterString, "receiver.requestMasterString")
     server.register_function(startElection, "receiver.startElection")
+    server.register_function(cme.timeAdvance, "receiver.timeAdvance")
+    server.register_function(startDistributedReadWrite, "receiver.startDistributedReadWrite")
     #server.register_function(startThreads, "startThreads")
     print "\nServer started and listening..."
     server.serve_forever()
@@ -406,7 +412,7 @@ def client():
             continue
         elif ans == "3":
             startReadWrite()
-            continue
+            break
         elif ans == "4":
             for entry in nodes:
                     proxy = xmlrpclib.ServerProxy("http://"+str(entry[0])+":"+str(entry[1])+"/", allow_none=True)
