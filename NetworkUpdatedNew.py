@@ -19,7 +19,7 @@ myID = 0
 masterNode = []
 masterWordString = []
 waitingQueue = []
-
+algorithm = None
 
 def rantomInt():
     print (random.randint(0,9))
@@ -205,7 +205,8 @@ def isJoined():
 
 # Start read-write
 def startReadWrite():
-    print ("\n Usage: start <algorithm (CME or RA)>: "),    
+    print ("\n Usage: start <algorithm (CME or RA)>: "),
+    global algorithm    
     algorithm = raw_input()
     if str(algorithm).upper() == "CME":
         centralizedMutualExclusion()
@@ -236,7 +237,7 @@ def sendStart(entry):
 #-----------------------------------------------#    
 def centralizedMutualExclusion():
     for node in nodes:
-        proxyServer = cme.get_proxy_server(node[0], node[1])
+        proxyServer = cme.get_proxy_server(node)
         proxyServer.receiver.startDistributedReadWrite(0)
     cme.start([ip, port, myID], nodes)
 
@@ -349,10 +350,23 @@ def nodeSignOff(nodeID):
     return
 
 
-def startDistributedReadWrite(algorithm):
-    if algorithm == 0:
+def startDistributedReadWrite(algorithm_code):
+    global algorithm
+    if algorithm_code == 0:
+        algorithm = "CME"
         cme.start([ip, port, myID], nodes)
 
+def wordStringUpdate(value):
+    if algorithm.upper() == "CME":
+        threading.Thread(target=cme.receive_word_string, args=(value,)).start()
+    else:
+        print "ReceiveWordStringRequest"
+        
+def wordStringRequest(requesterId, time):
+    if algorithm.upper() == "CME":
+        cme.receive_word_string_request(requesterId, time)
+    else:
+        print "ReceiveWordStringRequest"
 
 # Server implementation
 def server():
@@ -368,6 +382,8 @@ def server():
     server.register_function(startElection, "receiver.startElection")
     server.register_function(cme.timeAdvance, "receiver.timeAdvance")
     server.register_function(startDistributedReadWrite, "receiver.startDistributedReadWrite")
+    server.register_function(wordStringUpdate, "receiver.wordStringUpdate")
+    server.register_function(wordStringRequest, "receiver.wordStringRequest")
     #server.register_function(startThreads, "startThreads")
     print "\nServer started and listening..."
     server.serve_forever()
