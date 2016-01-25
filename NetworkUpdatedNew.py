@@ -97,7 +97,7 @@ def joinRequest(clientIP, clientPort, clientID):
         proxyServer.receiver.nodeJoined(str(ip), int(port), int(myID))  
         for entry in nodes:
             proxyServer.receiver.nodeJoined(str(entry[0]), int(entry[1]), int(entry[2]))        
-        nodes.append(myDetails)
+        nodes.append([clientIP, clientPort, newID])
         return
     else:
         print "\n Node already in network!"
