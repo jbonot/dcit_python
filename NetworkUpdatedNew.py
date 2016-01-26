@@ -368,6 +368,12 @@ def wordStringRequest(requesterId, time):
     else:
         print "ReceiveWordStringRequest"
 
+def finalWordStringRequest(requesterId):
+    if algorithm.upper() == "CME":
+        cme.send_final_string(requesterId)
+    else:
+        print "ReceiveWordStringRequest"
+        
 # Server implementation
 def server():
     server = SimpleXMLRPCServer((ip, port), allow_none=True)
@@ -384,6 +390,7 @@ def server():
     server.register_function(startDistributedReadWrite, "receiver.startDistributedReadWrite")
     server.register_function(wordStringUpdate, "receiver.wordStringUpdate")
     server.register_function(wordStringRequest, "receiver.wordStringRequest")
+    server.register_function(finalWordStringRequest, "receiver.finalWordStringRequest")
     #server.register_function(startThreads, "startThreads")
     print "\nServer started and listening..."
     server.serve_forever()
@@ -428,7 +435,7 @@ def client():
             continue
         elif ans == "3":
             startReadWrite()
-            break
+            time.sleep(25)
         elif ans == "4":
             for entry in nodes:
                     proxy = xmlrpclib.ServerProxy("http://"+str(entry[0])+":"+str(entry[1])+"/", allow_none=True)

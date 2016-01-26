@@ -32,14 +32,18 @@ def get_proxy_server(node):
     return xmlrpclib.ServerProxy("http://"+str(node[0])+":"+str(node[1])+"/", allow_none=True)
 
 def get_random_waiting_time():
-    return random.randint(1,9)
+    return random.randint(1,7)
 
-def request_final_string():
-    return
-
-def request_word_string(node, time):
-    proxy_server = get_proxy_server(node)
-    proxy_server.receiver.wordStringRequest(id, time)
+def send_final_string(requester):
+    node = find_node_by_id(requester)
+    if node == None:
+        print('Unknown ID: ' + str(requester))
+        return
+    done_nodes.append(node)
+    print(str(len(done_nodes)) + ' of ' + str(len(node_list)))
+    if (len(done_nodes) == len(node_list)):
+        for n in node_list:
+            get_proxy_server(n).wordStringUpdate(word_list)
 
 def check_request_queue():
     print('Checking request queue')
@@ -51,7 +55,17 @@ def check_request_queue():
     get_proxy_server(node).receiver.wordStringUpdate(word_string)
 
 def check_final_string(value):
-    return
+    print('-------------------')
+    print('final string: ' + value)
+    final_tokens = value.split()
+    print('words appended by this node: ' + ' '.join([word[0] for word in appended]))
+    print('-------------------')
+    missing = [word for word, index in appended if not final_tokens[index] == word]
+    if len(missing) == 0:
+        print('All words are included in the final string')
+    else:
+        print('Some words are missing from the final string')
+        print('Words missing from final string: ' + ' '.join(missing))
 
 def append_random_word(value):
     tokens = value.split()
@@ -96,11 +110,12 @@ def time_advance_grant(time, master):
     print('Time: ' + str(time))
     if (time == 20):
         awaiting_final_string = True
-        request_final_string()
+        print('Requesting final string from ' + str(master_node))
+        get_proxy_server(master).finalWordStringRequest(id)
         return
-    if (next_request_time == time):
-        print(master)
-        request_word_string(master, time)
+    print 'next request time: ' + str(next_request_time)
+    if (next_request_time <= time):
+        get_proxy_server(master).receiver.wordStringRequest(id, time)
 
 def timer():
     for time in range(1,21):
